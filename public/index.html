@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Simple Chat Client</title>
+    <!-- Socket.IO client-side library (served by the backend) -->
+    <script src="/socket.io/socket.io.js"></script>
+    <style>
+      body {
+        font-family: "Arial", sans-serif;
+        margin: 0;
+        padding: 20px;
+        background-color: #f4f7f6;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        min-height: 100vh;
+      }
+      .chat-container {
+        background-color: #fff;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        width: 100%;
+        max-width: 600px;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+      }
+      .chat-header {
+        background-color: #4caf50;
+        color: white;
+        padding: 15px;
+        text-align: center;
+        font-size: 1.2em;
+        font-weight: bold;
+      }
+      .chat-messages {
+        flex-grow: 1;
+        padding: 15px;
+        border-bottom: 1px solid #eee;
+        overflow-y: auto;
+        max-height: 400px;
+        background-color: #e8f5e9;
+      }
+      .message-item {
+        margin-bottom: 10px;
+        padding: 8px 12px;
+        border-radius: 5px;
+        word-wrap: break-word;
+      }
+      .message-item strong {
+        color: #2e7d32;
+      }
+      .message-item.system {
+        font-style: italic;
+        color: #616161;
+        background-color: #e0e0e0;
+        text-align: center;
+      }
+      .chat-input-area {
+        padding: 15px;
+        background-color: #f0f4f7;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .chat-input-area input[type="text"],
+      .chat-input-area input[type="password"] {
+        /* Added for username/room */
+        flex-grow: 1;
+        padding: 10px;
+        border: 1px solid #ccc;
+        border-radius: 5px;
+        font-size: 1em;
+      }
+      .chat-input-area button {
+        padding: 10px 15px;
+        background-color: #2196f3;
+        color: white;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+        font-size: 1em;
+        transition: background-color 0.2s;
+      }
+      .chat-input-area button:hover {
+        background-color: #1976d2;
+      }
+      .chat-input-area button:disabled {
+        background-color: #bbdefb;
+        cursor: not-allowed;
+      }
+      .chat-controls {
+        display: flex;
+        gap: 10px;
+      }
+      .chat-controls input {
+        flex: 1;
+      }
+      .message-input {
+        width: 100%;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="chat-container">
+      <div class="chat-header">Real-time Chat</div>
+      <div class="chat-messages" id="messages">
+        <!-- Messages will be appended here -->
+      </div>
+      <div class="chat-input-area">
+        <div class="chat-controls">
+          <input
+            type="text"
+            id="usernameInput"
+            placeholder="Enter your username"
+            value="User"
+          />
+          <input
+            type="text"
+            id="roomInput"
+            placeholder="Enter room name (e.g., general)"
+            value="general"
+          />
+          <button id="joinButton">Join Room</button>
+        </div>
+        <input
+          type="text"
+          id="messageInput"
+          class="message-input"
+          placeholder="Type your message..."
+          disabled
+        />
+        <button id="sendButton" disabled>Send</button>
+      </div>
+    </div>
+
+    <script>
+      const socket = io(); // Connect to the Socket.IO server (defaults to current host/port)
+
+      const messagesDiv = document.getElementById("messages");
+      const usernameInput = document.getElementById("usernameInput");
+      const roomInput = document.getElementById("roomInput");
+      const joinButton = document.getElementById("joinButton");
+      const messageInput = document.getElementById("messageInput");
+      const sendButton = document.getElementById("sendButton");
+
+      let currentUsername = "";
+      let currentRoom = "";
+
+      // Function to display messages
+      function displayMessage(sender, message, isSystem = false) {
+        const messageItem = document.createElement("div");
+        messageItem.classList.add("message-item");
+        if (isSystem) {
+          messageItem.classList.add("system");
+          messageItem.textContent = message;
+        } else {
+          messageItem.innerHTML = `<strong>${sender}:</strong> ${message}`;
+        }
+        messagesDiv.appendChild(messageItem);
+        messagesDiv.scrollTop = messagesDiv.scrollHeight; // Auto-scroll to bottom
+      }
+
+      // --- Socket.IO Client Events ---
+
+      // Event: 'connect' - Fired when the client successfully connects to the server
+      socket.on("connect", () => {
+        displayMessage("System", "Connected to chat server.", true);
+        joinButton.disabled = false;
+        usernameInput.disabled = false;
+        roomInput.disabled = false;
+      });
+
+      // Event: 'message' - Fired when the server sends a message
+      socket.on("message", (sender, message) => {
+        displayMessage(sender, message);
+      });
+
+      // Event: 'disconnect' - Fired when the client disconnects from the server
+      socket.on("disconnect", () => {
+        displayMessage("System", "Disconnected from chat server.", true);
+        joinButton.disabled = true;
+        messageInput.disabled = true;
+        sendButton.disabled = true;
+      });
+
+      // --- UI Event Listeners ---
+
+      // Join Button Click
+      joinButton.addEventListener("click", () => {
+        const username = usernameInput.value.trim();
+        const room = roomInput.value.trim().toLowerCase(); // Rooms are case-insensitive on backend
+
+        if (username && room) {
+          currentUsername = username;
+          currentRoom = room;
+          socket.emit("joinRoom", room, username); // Emit 'joinRoom' event to server
+
+          // Update UI state
+          usernameInput.disabled = true;
+          roomInput.disabled = true;
+          joinButton.disabled = true;
+          messageInput.disabled = false;
+          sendButton.disabled = false;
+          messagesDiv.innerHTML = ""; // Clear messages on room change
+          displayMessage(
+            "System",
+            `Attempting to join room: ${currentRoom} as ${currentUsername}...`,
+            true
+          );
+        } else {
+          alert("Please enter both a username and a room name."); // Simple alert
+        }
+      });
+
+      // Send Button Click
+      sendButton.addEventListener("click", () => {
+        const message = messageInput.value.trim();
+        if (message) {
+          socket.emit("chatMessage", message); // Emit 'chatMessage' event to server
+          messageInput.value = ""; // Clear input field
+        }
+      });
+
+      // Send message on Enter key press in message input
+      messageInput.addEventListener("keypress", (e) => {
+        if (e.key === "Enter") {
+          sendButton.click();
+        }
+      });
+    </script>
+  </body>
+</html>

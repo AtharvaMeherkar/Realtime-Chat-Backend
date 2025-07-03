@@ -1,0 +1,21 @@
+# Node.js
+node_modules/
+.env
+npm-debug.log
+yarn-debug.log
+yarn-error.log
+.pnpm-debug.log
+.npm/
+.npmrc
+.yarn/
+.yarnrc.yml
+.pnp.cjs
+.pnp.js
+.cache/
+build/
+dist/
+
+# IDE / OS files
+.vscode/
+.DS_Store
+Thumbs.db
